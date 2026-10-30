@@ -2,7 +2,7 @@
 """market.py - prices, breadth, calendar and options helpers for the earnings hunt. Commands:
 mood | breadth [--vs SNAPFILE] [--html OUT] [--asof DATE] | ext SYMS | earnings DATE [MIN_B] | email BODY TABLE OUT
 | move SYM DATE bmo|amc | price "SYM:benefit|suffer:SECTION,..." RUNTYPE | score FILE | rel SYMS DATE
-| queue FROM TO [MIN_B] | revs SYMS | why SYMS DATE | lint BODY | watch FILE"""
+| queue FROM TO [MIN_B] | revs SYMS | why SYMS DATE | lint BODY | watch FILE | short SYMS"""
 import csv, io, json, sys, time, urllib.request, datetime as dt
 from zoneinfo import ZoneInfo
 ET = ZoneInfo("America/New_York")
@@ -429,6 +429,16 @@ def watch(path):
   gap = a - b; ok = gap > 0 if side == "benefit" else gap < 0
   print(f"{s} {side} {d0}: {'RIGHT' if ok else 'WRONG'} ({s} {a:+.2f}% vs {funds[s]} {b:+.2f}%, gap {gap:+.2f}) {note}")
 
+def short(spec):
+ for s in spec.split(","):
+  s = s.strip().upper()
+  try:
+   rows = json.loads(get(f"https://api.nasdaq.com/api/quote/{s}/short-interest?assetClass=stocks"))["data"]["shortInterestTable"]["rows"][:2]
+   si = [_num(r["interest"]) for r in rows]
+   print(f"{s}: {si[0] / 1e6:.1f}M shares sold short as of {rows[0]['settlementDate']} ({100 * (si[0] / si[1] - 1):+.0f}% vs prior reading); "
+    f"{rows[0]['daysToCover']:.1f} days of trading to cover (above 5 = crowded short, squeeze risk on good news)")
+  except Exception: print(f"{s}: short interest not available (Nasdaq publishes it for Nasdaq-listed stocks only)")
+
 def queue(d0, d1, min_b=10):
  out, d = {}, dt.date.fromisoformat(d0)
  while d <= dt.date.fromisoformat(d1):
@@ -462,5 +472,6 @@ if __name__ == "__main__":
  elif a[0] == "why" and len(a) > 2: why(a[1], a[2])
  elif a[0] == "lint" and len(a) > 1: lint(a[1])
  elif a[0] == "watch" and len(a) > 1: watch(a[1])
+ elif a[0] == "short" and len(a) > 1: short(a[1])
  elif a[0] == "queue" and len(a) > 2: queue(a[1], a[2], float(a[3]) if len(a) > 3 else 10)
  else: print(__doc__)
